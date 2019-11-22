@@ -22,7 +22,8 @@ from django.utils.module_loading import import_string
 from .conf import settings as oidc_rp_settings
 from .models import OIDCUser
 from .signals import oidc_user_created
-from .utils import validate_and_return_id_token
+from .utils import calculate_username_from_oidc_sub, \
+    validate_and_return_id_token
 
 
 class OIDCAuthBackend(ModelBackend):
@@ -123,7 +124,8 @@ def create_oidc_user_from_claims(claims):
     """ Creates an ``OIDCUser`` instance using the claims extracted from an id_token. """
     sub = claims['sub']
     email = claims['email']
-    username = base64.urlsafe_b64encode(hashlib.sha1(force_bytes(sub)).digest()).rstrip(b'=')
+    #username = base64.urlsafe_b64encode(hashlib.sha1(force_bytes(sub)).digest()).rstrip(b'=')
+    username = calculate_username_from_oidc_sub(sub)
     user = get_user_model().objects.create_user(smart_text(username), email)
     oidc_user = OIDCUser.objects.create(user=user, sub=sub, userinfo=claims)
     return oidc_user

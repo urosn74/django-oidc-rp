@@ -6,7 +6,10 @@
 
 """
 
+import base64
 import datetime as dt
+import hashlib
+
 from calendar import timegm
 from urllib.parse import urlparse
 
@@ -19,11 +22,48 @@ from jwkest.jws import JWS
 from .conf import settings as oidc_rp_settings
 
 
-def validate_and_return_id_token(jws, nonce=None, validate_nonce=True):
+OIDC_SETUP_ATTRS = [
+    'PROVIDER_ENDPOINT', 'PROVIDER_URL', 'PROVIDER_AUTHORIZATION_ENDPOINT',
+    'PROVIDER_TOKEN_ENDPOINT', 'PROVIDER_JWKS_ENDPOINT', 'PROVIDER_USERINFO_ENDPOINT',
+    'PROVIDER_USERINFO_ENDPOINT', 'PROVIDER_END_SESSION_ENDPOINT',
+    'PROVIDER_END_SESSION_REDIRECT_URI_PARAMETER', 'PROVIDER_END_SESSION_ID_TOKEN_PARAMETER',
+    'PROVIDER_SIGNATURE_ALG', 'PROVIDER_SIGNATURE_KEY', 'CLIENT_ID',
+    'CLIENT_SECRET', 'STATE_LENGTH', 'SCOPES', 'USE_NONCE', 'NONCE_LENGTH',
+    'ID_TOKEN_MAX_AGE', 'ID_TOKEN_INCLUDE_USERINFO', 'AUTHENTICATION_REDIRECT_URI',
+    'AUTHENTICATION_FAILURE_REDIRECT_URI', 'USER_DETAILS_HANDLER',
+    'UNAUTHENTICATED_SESSION_MANAGEMENT_KEY'
+]
+
+
+class OidcSetup:
+    pass
+
+
+def get_active_oidc_setup(oidc_settings=None):
+    return oidc_settings if oidc_settings else oidc_rp_settings
+
+
+def build_custom_oidc_setup(**kwargs):
+    oidc_setup = OidcSetup()
+    for key in OIDC_SETUP_ATTRS:
+        setattr(
+            oidc_setup,
+            key,
+            kwargs.get(key, getattr(oidc_rp_settings, key, None))
+        )
+    return oidc_setup
+
+
+def calculate_username_from_oidc_sub(sub):
+    return base64.urlsafe_b64encode(hashlib.sha1(force_bytes(sub)).digest()).rstrip(b'=')
+
+
+def validate_and_return_id_token(jws, nonce=None, validate_nonce=True, oidc_settings=None):
     """ Validates the id_token according to the OpenID Connect specification. """
-    shared_key = oidc_rp_settings.CLIENT_SECRET \
-        if oidc_rp_settings.PROVIDER_SIGNATURE_ALG == 'HS256' \
-        else oidc_rp_settings.PROVIDER_SIGNATURE_KEY  # RS256
+    oidc_setup = get_active_oidc_setup(oidc_settings)
+    shared_key = oidc_setup.CLIENT_SECRET \
+        if oidc_setup.PROVIDER_SIGNATURE_ALG == 'HS256' \
+        else oidc_setup.PROVIDER_SIGNATURE_KEY  # RS256
 
     try:
         # Decodes the JSON Web Token and raise an error if the signature is invalid.
@@ -32,7 +72,7 @@ def validate_and_return_id_token(jws, nonce=None, validate_nonce=True):
         return
 
     # Validates the claims embedded in the id_token.
-    _validate_claims(id_token, nonce=nonce, validate_nonce=validate_nonce)
+    _validate_claims(id_token, nonce=nonce, validate_nonce=validate_nonce, oidc_settings=oidc_setup)
 
     return id_token
 
@@ -50,8 +90,9 @@ def _get_jwks_keys(shared_key):
     return jwks_keys
 
 
-def _validate_claims(id_token, nonce=None, validate_nonce=True):
+def _validate_claims(id_token, nonce=None, validate_nonce=True, oidc_settings=None):
     """ Validates the claims embedded in the JSON Web Token. """
+    oidc_setup = get_active_oidc_setup(oidc_settings)
     iss_parsed_url = urlparse(id_token['iss'])
     provider_parsed_url = urlparse(oidc_rp_settings.PROVIDER_ENDPOINT)
     if iss_parsed_url.netloc != provider_parsed_url.netloc:
@@ -60,13 +101,13 @@ def _validate_claims(id_token, nonce=None, validate_nonce=True):
     if isinstance(id_token['aud'], str):
         id_token['aud'] = [id_token['aud']]
 
-    if oidc_rp_settings.CLIENT_ID not in id_token['aud']:
+    if oidc_setup.CLIENT_ID not in id_token['aud']:
         raise SuspiciousOperation('Invalid audience')
 
     if len(id_token['aud']) > 1 and 'azp' not in id_token:
         raise SuspiciousOperation('Incorrect id_token: azp')
 
-    if 'azp' in id_token and id_token['azp'] != oidc_rp_settings.CLIENT_ID:
+    if 'azp' in id_token and id_token['azp'] != oidc_setup.CLIENT_ID:
         raise SuspiciousOperation('Incorrect id_token: azp')
 
     utc_timestamp = timegm(dt.datetime.utcnow().utctimetuple())
@@ -77,10 +118,10 @@ def _validate_claims(id_token, nonce=None, validate_nonce=True):
         raise SuspiciousOperation('Incorrect id_token: nbf')
 
     # Verifies that the token was issued in the allowed timeframe.
-    if utc_timestamp > id_token['iat'] + oidc_rp_settings.ID_TOKEN_MAX_AGE:
+    if utc_timestamp > id_token['iat'] + oidc_setup.ID_TOKEN_MAX_AGE:
         raise SuspiciousOperation('Incorrect id_token: iat')
 
     # Validate the nonce to ensure the request was not modified if applicable.
     id_token_nonce = id_token.get('nonce', None)
-    if validate_nonce and oidc_rp_settings.USE_NONCE and id_token_nonce != nonce:
+    if validate_nonce and oidc_setup.USE_NONCE and id_token_nonce != nonce:
         raise SuspiciousOperation('Incorrect id_token: nonce')
