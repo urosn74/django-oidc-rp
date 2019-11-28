@@ -9,6 +9,7 @@
 
 """
 
+import logging
 import time
 
 from django.conf import settings
@@ -21,6 +22,33 @@ from django.utils.http import is_safe_url, urlencode
 from django.views.generic import View
 
 from .conf import settings as oidc_rp_settings
+
+
+log = logging.getLogger(__name__)
+
+
+def _build_http_request_diagnostic_info(request):
+    try:
+        headers = 'Request headers:\n' + \
+            '    HTTP_USER_AGENT=%s\n' % request.META.get('HTTP_USER_AGENT', '?') + \
+            '    HTTP_HTTP_REFERER=%s\n' % request.META.get('HTTP_HTTP_REFERER', '?') + \
+            '    HTTP_REQUEST_METHOD=%s\n' % request.META.get('HTTP_REQUEST_METHOD', '?')
+        cookies = 'Cookies:\n'
+        for name, value in request.COOKIES.items():
+            cookies += ('    %s=%s\n' % (name, value))
+        general = 'General info:\n' + \
+            '    Method:       %s\n' % request.method + \
+            '    Path:         %s\n' % request.path_info + \
+            '    Content-Type: %s\n' % request.content_type + \
+            '    User:         %s\n' % request.user + \
+            '    Session key:  %s\n' % request.session.session_key
+        session_data = 'Session data:\n'
+        for key, value in request.session.items():
+            session_data += ('    %s=%s\n' % (key, value))
+        return general + headers + cookies + session_data
+    except:
+        log.warning('could not build HTTP diagnostics info', exc_info=True)
+        return 'could not build HTTP diagnostics info'
 
 
 class OIDCAuthRequestView(View):
@@ -66,6 +94,7 @@ class OIDCAuthRequestView(View):
         query = urlencode(authentication_request_params)
         redirect_url = '{url}?{query}'.format(
             url=oidc_rp_settings.PROVIDER_AUTHORIZATION_ENDPOINT, query=query)
+        log.info('initiating OIDC authentication for session %s with %s' % (request.session.session_key, redirect_url))
         return HttpResponseRedirect(redirect_url)
 
 
@@ -103,6 +132,11 @@ class OIDCAuthCallbackView(View):
             # generated when forging the authorization request. This is necessary to mitigate
             # Cross-Site Request Forgery (CSRF, XSRF).
             if callback_params['state'] != state:
+                log.warn('OIDC callback state value does not match expected value\n' + \
+                         '    expected state:  %s\n' % state + \
+                         '    received state:  %s\n' % callback_params['state'] + \
+                         '    callback params: %s\n' % str(callback_params) + \
+                         _build_http_request_diagnostic_info(request))
                 raise SuspiciousOperation('Invalid OpenID Connect callback state value')
 
             # Authenticates the end-user.
@@ -130,6 +164,8 @@ class OIDCAuthCallbackView(View):
             # OpenID Connect Provider authenticate endpoint.
             auth.logout(request)
 
+        log.warn('authentication failure detected; HTTP request diagnostics:\n' + \
+                 _build_http_request_diagnostic_info(request))
         return HttpResponseRedirect(oidc_rp_settings.AUTHENTICATION_FAILURE_REDIRECT_URI)
 
 
