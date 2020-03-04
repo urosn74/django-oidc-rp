@@ -19,7 +19,8 @@ from django.urls import reverse
 from django.utils.encoding import force_bytes, smart_text
 from django.utils.module_loading import import_string
 
-from .conf import settings as oidc_rp_settings
+#from .conf import settings as oidc_rp_settings
+from .conf import get_oidc_rp_settings
 from .models import OIDCUser
 from .signals import oidc_user_created
 from .utils import calculate_username_from_oidc_sub, \
@@ -41,6 +42,8 @@ class OIDCAuthBackend(ModelBackend):
         """ Authenticates users in case of the OpenID Connect Authorization code flow. """
         # NOTE: the request object is mandatory to perform the authentication using an authorization
         # code provided by the OIDC supplier.
+        oidc_rp_settings = get_oidc_rp_settings()
+
         if (nonce is None and oidc_rp_settings.USE_NONCE) or request is None:
             return
 

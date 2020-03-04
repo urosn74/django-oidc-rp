@@ -11,8 +11,8 @@ from hashlib import md5, sha224, sha256
 
 from django.contrib.sites.requests import RequestSite
 
-from .conf import settings as oidc_rp_settings
-
+#from .conf import settings as oidc_rp_settings
+from .conf import get_oidc_rp_settings
 
 _anonymous_session_state = None
 
@@ -20,6 +20,8 @@ _anonymous_session_state = None
 def oidc(request):
     """ Inserts OIDC-related values into the context. """
     global _anonymous_session_state
+
+    oidc_rp_settings = get_oidc_rp_settings()
 
     if _anonymous_session_state is None and oidc_rp_settings.UNAUTHENTICATED_SESSION_MANAGEMENT_KEY:
         salt = md5(uuid.uuid4().hex.encode()).hexdigest()

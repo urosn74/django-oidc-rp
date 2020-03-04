@@ -21,7 +21,8 @@ from django.utils.crypto import get_random_string
 from django.utils.http import is_safe_url, urlencode
 from django.views.generic import View
 
-from .conf import settings as oidc_rp_settings
+#from .conf import settings as oidc_rp_settings
+from .conf import get_oidc_rp_settings
 
 
 log = logging.getLogger(__name__)
@@ -65,6 +66,7 @@ class OIDCAuthRequestView(View):
     def get(self, request):
         """ Processes GET requests. """
         # Defines common parameters used to bootstrap the authentication request.
+        oidc_rp_settings = get_oidc_rp_settings()
         state = get_random_string(oidc_rp_settings.STATE_LENGTH)
         authentication_request_params = request.GET.dict()
         authentication_request_params.update({
@@ -125,6 +127,7 @@ class OIDCAuthCallbackView(View):
 
         # NOTE: a redirect to the failure page should be return if some required GET parameters are
         # missing or if no state can be retrieved from the current session.
+        oidc_rp_settings = get_oidc_rp_settings()
 
         if ((nonce and oidc_rp_settings.USE_NONCE) or not oidc_rp_settings.USE_NONCE) and \
                 ('code' in callback_params and 'state' in callback_params) and state:
@@ -187,6 +190,7 @@ class OIDCEndSessionView(View):
     def post(self, request):
         """ Processes POST requests. """
         logout_url = settings.LOGOUT_REDIRECT_URL or '/'
+        oidc_rp_settings = get_oidc_rp_settings()
 
         # Log out the current user.
         if request.user.is_authenticated:
@@ -203,6 +207,7 @@ class OIDCEndSessionView(View):
     @property
     def provider_end_session_url(self):
         """ Returns the end-session URL. """
+        oidc_rp_settings = get_oidc_rp_settings()
         q = QueryDict(mutable=True)
         q[oidc_rp_settings.PROVIDER_END_SESSION_REDIRECT_URI_PARAMETER] = \
             self.request.build_absolute_uri(settings.LOGOUT_REDIRECT_URL or '/')

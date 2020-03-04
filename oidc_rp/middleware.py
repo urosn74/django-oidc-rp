@@ -14,7 +14,10 @@ import requests
 import requests.exceptions
 from django.contrib import auth
 
-from .conf import settings as oidc_rp_settings
+#from .conf import settings as oidc_rp_settings
+from .conf import build_oidc_rp_settings, \
+    get_oidc_rp_settings, \
+    release_oidc_rp_settings
 from .utils import validate_and_return_id_token
 
 
@@ -38,6 +41,8 @@ class OIDCRefreshIDTokenMiddleware:
         refresh_token = request.session.get('oidc_auth_refresh_token')
         if refresh_token is None:
             return
+
+        oidc_rp_settings = get_oidc_rp_settings()
 
         id_token_exp_timestamp = request.session.get('oidc_auth_id_token_exp_timestamp', None)
         now_timestamp = time.time()
@@ -85,3 +90,16 @@ class OIDCRefreshIDTokenMiddleware:
         # Saves the new expiration timestamp.
         request.session['oidc_auth_id_token_exp_timestamp'] = \
             time.time() + oidc_rp_settings.ID_TOKEN_MAX_AGE
+
+
+class OIDCConfigurationMiddleware:
+    """ Initializes dynamic ODIC configuration based on request properties """
+
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        build_oidc_rp_settings(request)
+        response = self.get_response(request)
+        release_oidc_rp_settings()
+        return response

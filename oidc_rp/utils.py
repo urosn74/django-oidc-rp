@@ -19,7 +19,8 @@ from jwkest import JWKESTException
 from jwkest.jwk import KEYS
 from jwkest.jws import JWS
 
-from .conf import settings as oidc_rp_settings
+#from .conf import settings as oidc_rp_settings
+from .conf import get_oidc_rp_settings
 
 
 OIDC_SETUP_ATTRS = [
@@ -40,7 +41,7 @@ class OidcSetup:
 
 
 def get_active_oidc_setup(oidc_settings=None):
-    return oidc_settings if oidc_settings else oidc_rp_settings
+    return oidc_settings if oidc_settings else get_oidc_rp_settings()
 
 
 def build_custom_oidc_setup(**kwargs):
@@ -49,7 +50,7 @@ def build_custom_oidc_setup(**kwargs):
         setattr(
             oidc_setup,
             key,
-            kwargs.get(key, getattr(oidc_rp_settings, key, None))
+            kwargs.get(key, getattr(get_oidc_rp_settings(), key, None))
         )
     return oidc_setup
 
@@ -83,7 +84,7 @@ def _get_jwks_keys(shared_key):
     # keys allowing to decrypt them. These public keys are exposed through the 'jwks_uri' and should
     # be used to decrypt the JWS - JSON Web Signature.
     jwks_keys = KEYS()
-    jwks_keys.load_from_url(oidc_rp_settings.PROVIDER_JWKS_ENDPOINT)
+    jwks_keys.load_from_url(get_oidc_rp_settings().PROVIDER_JWKS_ENDPOINT)
     # Adds the shared key (which can correspond to the client_secret) as an oct key so it can be
     # used for HMAC signatures.
     jwks_keys.add({'key': smart_bytes(shared_key), 'kty': 'oct'})
@@ -94,7 +95,7 @@ def _validate_claims(id_token, nonce=None, validate_nonce=True, oidc_settings=No
     """ Validates the claims embedded in the JSON Web Token. """
     oidc_setup = get_active_oidc_setup(oidc_settings)
     iss_parsed_url = urlparse(id_token['iss'])
-    provider_parsed_url = urlparse(oidc_rp_settings.PROVIDER_ENDPOINT)
+    provider_parsed_url = urlparse(get_oidc_rp_settings().PROVIDER_ENDPOINT)
     if iss_parsed_url.netloc != provider_parsed_url.netloc:
         raise SuspiciousOperation('Invalid issuer')
 
