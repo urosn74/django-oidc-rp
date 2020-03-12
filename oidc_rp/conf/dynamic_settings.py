@@ -11,6 +11,7 @@ class DynamicOidcSettings:
                  userinfo_endpoint='userinfo',
                  end_session_endpoint='logout',
                  end_session_redirect_uri_parameter='post_logout_redirect_uri',
+                 end_session_id_token_parameter='id_token_hint',
                  client_id=None,
                  client_secret=None,
                  authentication_redirect_uri='/',
@@ -26,6 +27,7 @@ class DynamicOidcSettings:
         self.PROVIDER_USERINFO_ENDPOINT = urljoin(provider_endpoint, userinfo_endpoint)
         self.PROVIDER_END_SESSION_ENDPOINT = urljoin(provider_endpoint, end_session_endpoint)
         self.PROVIDER_END_SESSION_REDIRECT_URI_PARAMETER = end_session_redirect_uri_parameter
+        self.PROVIDER_END_SESSION_ID_TOKEN_PARAMETER = end_session_id_token_parameter
         self.PROVIDER_SIGNATURE_ALG = 'HS256'
         self.PROVIDER_SIGNATURE_KEY = None
         self.CLIENT_ID = client_id
