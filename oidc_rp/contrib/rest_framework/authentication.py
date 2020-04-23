@@ -14,7 +14,8 @@ from rest_framework.authentication import BaseAuthentication, get_authorization_
 from rest_framework.exceptions import AuthenticationFailed
 
 from oidc_rp.backends import create_oidc_user_from_claims, update_oidc_user_from_claims
-from oidc_rp.conf import settings as oidc_rp_settings
+#from oidc_rp.conf import settings as oidc_rp_settings
+from oidc_rp.conf import get_oidc_rp_settings
 from oidc_rp.models import OIDCUser
 
 
@@ -32,6 +33,7 @@ class BearerTokenAuthentication(BaseAuthentication):
     def authenticate(self, request):
         """ Authenticates users using a provided Bearer token. """
         # First step, retrieves the Bearer token from the authorization header.
+        oidc_rp_settings = get_oidc_rp_settings()
         auth = get_authorization_header(request).split()
         if not auth or smart_text(auth[0].lower()) != 'bearer':
             return

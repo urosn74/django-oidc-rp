@@ -27,7 +27,7 @@ if _OIDC_RP_DYNAMIC_SETTINGS_BUILDER is not None:
     try:
         _build_dynamic_settings = _resolve_member(_OIDC_RP_DYNAMIC_SETTINGS_BUILDER)
     except:
-        _LOG.error('attempting to build dynamic OIDC RP settings', exc_info=True)
+        _LOG.error('attempting to resolve builder function for dynamic OIDC RP settings', exc_info=True)
         _build_dynamic_settings = None
 
 
