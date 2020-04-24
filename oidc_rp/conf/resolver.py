@@ -12,6 +12,8 @@ _OIDC_RP_DYNAMIC_SETTINGS_BUILDER = getattr(
     settings, 'OIDC_RP_DYNAMIC_SETTINGS_BUILDER',
     None
 )
+_dynamic_settings_builder_resolved = False
+_build_dynamic_settings = None
 _THREAD_LOCALS = threading.local()
 
 
@@ -23,18 +25,20 @@ def _resolve_member(ref):
     return getattr(mc_mod, ref_member, None)
 
 
-if _OIDC_RP_DYNAMIC_SETTINGS_BUILDER is not None:
-    try:
-        _build_dynamic_settings = _resolve_member(_OIDC_RP_DYNAMIC_SETTINGS_BUILDER)
-    except:
-        _LOG.error('attempting to resolve builder function for dynamic OIDC RP settings', exc_info=True)
-        _build_dynamic_settings = None
+def _get_oidc_rp_settings_builder():
+    if _OIDC_RP_DYNAMIC_SETTINGS_BUILDER is not None:
+        try:
+            return _resolve_member(_OIDC_RP_DYNAMIC_SETTINGS_BUILDER)
+        except:
+            _LOG.error('failed to resolve builder function for dynamic OIDC RP settings', exc_info=True)
+    return None
 
 
 def build_oidc_rp_settings(request):
-    if _build_dynamic_settings:
+    builder = _get_oidc_rp_settings_builder()
+    if builder:
         _LOG.debug('attempting to build dynamic OIDC RP settings')
-        _THREAD_LOCALS.oidc_rp_settings = _build_dynamic_settings(request)
+        _THREAD_LOCALS.oidc_rp_settings = builder(request)
 
 
 def release_oidc_rp_settings():
