@@ -9,6 +9,7 @@
 import base64
 import datetime as dt
 import hashlib
+import logging
 
 from calendar import timegm
 from urllib.parse import urlparse
@@ -19,7 +20,6 @@ from jwkest import JWKESTException
 from jwkest.jwk import KEYS
 from jwkest.jws import JWS
 
-#from .conf import settings as oidc_rp_settings
 from .conf import get_oidc_rp_settings
 
 
@@ -34,6 +34,8 @@ OIDC_SETUP_ATTRS = [
     'AUTHENTICATION_FAILURE_REDIRECT_URI', 'USER_DETAILS_HANDLER',
     'UNAUTHENTICATED_SESSION_MANAGEMENT_KEY'
 ]
+
+_LOG = logging.getLogger(__name__)
 
 
 class OidcSetup:
@@ -78,13 +80,17 @@ def validate_and_return_id_token(jws, nonce=None, validate_nonce=True, oidc_sett
     return id_token
 
 
-def _get_jwks_keys(shared_key):
+def _get_jwks_keys(shared_key, oidc_settings=None):
     """ Returns JWKS keys used to decrypt id_token values. """
     # The OpenID Connect Provider (OP) uses RSA keys to sign/enrypt ID tokens and generate public
     # keys allowing to decrypt them. These public keys are exposed through the 'jwks_uri' and should
     # be used to decrypt the JWS - JSON Web Signature.
+    if oidc_settings is None:
+        oidc_settings = get_oidc_rp_settings()
     jwks_keys = KEYS()
-    jwks_keys.load_from_url(get_oidc_rp_settings().PROVIDER_JWKS_ENDPOINT)
+    jwks_url = oidc_settings.PROVIDER_JWKS_ENDPOINT
+    _LOG.debug('loading JWKS keys from %s', jwks_url)
+    jwks_keys.load_from_url(jwks_url)
     # Adds the shared key (which can correspond to the client_secret) as an oct key so it can be
     # used for HMAC signatures.
     jwks_keys.add({'key': smart_bytes(shared_key), 'kty': 'oct'})
@@ -93,22 +99,23 @@ def _get_jwks_keys(shared_key):
 
 def _validate_claims(id_token, nonce=None, validate_nonce=True, oidc_settings=None):
     """ Validates the claims embedded in the JSON Web Token. """
-    oidc_setup = get_active_oidc_setup(oidc_settings)
+    if oidc_settings is None:
+        oidc_settings = get_oidc_rp_settings()
     iss_parsed_url = urlparse(id_token['iss'])
-    provider_parsed_url = urlparse(get_oidc_rp_settings().PROVIDER_ENDPOINT)
+    provider_parsed_url = urlparse(oidc_settings.PROVIDER_ENDPOINT)
     if iss_parsed_url.netloc != provider_parsed_url.netloc:
         raise SuspiciousOperation('Invalid issuer')
 
     if isinstance(id_token['aud'], str):
         id_token['aud'] = [id_token['aud']]
 
-    if oidc_setup.CLIENT_ID not in id_token['aud']:
+    if oidc_settings.CLIENT_ID not in id_token['aud']:
         raise SuspiciousOperation('Invalid audience')
 
     if len(id_token['aud']) > 1 and 'azp' not in id_token:
         raise SuspiciousOperation('Incorrect id_token: azp')
 
-    if 'azp' in id_token and id_token['azp'] != oidc_setup.CLIENT_ID:
+    if 'azp' in id_token and id_token['azp'] != oidc_settings.CLIENT_ID:
         raise SuspiciousOperation('Incorrect id_token: azp')
 
     utc_timestamp = timegm(dt.datetime.utcnow().utctimetuple())
@@ -119,10 +126,10 @@ def _validate_claims(id_token, nonce=None, validate_nonce=True, oidc_settings=No
         raise SuspiciousOperation('Incorrect id_token: nbf')
 
     # Verifies that the token was issued in the allowed timeframe.
-    if utc_timestamp > id_token['iat'] + oidc_setup.ID_TOKEN_MAX_AGE:
+    if utc_timestamp > id_token['iat'] + oidc_settings.ID_TOKEN_MAX_AGE:
         raise SuspiciousOperation('Incorrect id_token: iat')
 
     # Validate the nonce to ensure the request was not modified if applicable.
     id_token_nonce = id_token.get('nonce', None)
-    if validate_nonce and oidc_setup.USE_NONCE and id_token_nonce != nonce:
+    if validate_nonce and oidc_settings.USE_NONCE and id_token_nonce != nonce:
         raise SuspiciousOperation('Incorrect id_token: nonce')
