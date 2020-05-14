@@ -85,8 +85,8 @@ def _get_jwks_keys(shared_key, oidc_settings=None):
     # The OpenID Connect Provider (OP) uses RSA keys to sign/enrypt ID tokens and generate public
     # keys allowing to decrypt them. These public keys are exposed through the 'jwks_uri' and should
     # be used to decrypt the JWS - JSON Web Signature.
-    if oidc_settings is None:
-        oidc_settings = get_oidc_rp_settings()
+    _LOG.debug('_get_jwks_keys received oidc_settings ... %s', oidc_settings)
+    oidc_settings = get_active_oidc_setup(oidc_settings)
     jwks_keys = KEYS()
     jwks_url = oidc_settings.PROVIDER_JWKS_ENDPOINT
     _LOG.debug('loading JWKS keys from %s', jwks_url)
