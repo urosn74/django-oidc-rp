@@ -61,7 +61,7 @@ def calculate_username_from_oidc_sub(sub):
     return base64.urlsafe_b64encode(hashlib.sha1(force_bytes(sub)).digest()).rstrip(b'=')
 
 
-def validate_and_return_id_token(jws, nonce=None, validate_nonce=True, oidc_settings=None):
+def validate_and_return_id_token(jws, nonce=None, validate_nonce=True, validate_aud=True, validate_azp=True, oidc_settings=None):
     """ Validates the id_token according to the OpenID Connect specification. """
     oidc_settings = get_active_oidc_setup(oidc_settings)
     shared_key = oidc_settings.CLIENT_SECRET \
@@ -75,7 +75,8 @@ def validate_and_return_id_token(jws, nonce=None, validate_nonce=True, oidc_sett
         return
 
     # Validates the claims embedded in the id_token.
-    _validate_claims(id_token, nonce=nonce, validate_nonce=validate_nonce, oidc_settings=oidc_settings)
+    _validate_claims(id_token, nonce=nonce, validate_nonce=validate_nonce, validate_aud=validate_aud,
+                     validate_azp=validate_azp, oidc_settings=oidc_settings)
 
     return id_token
 
@@ -97,7 +98,7 @@ def _get_jwks_keys(shared_key, oidc_settings=None):
     return jwks_keys
 
 
-def _validate_claims(id_token, nonce=None, validate_nonce=True, oidc_settings=None):
+def _validate_claims(id_token, nonce=None, validate_nonce=True, validate_aud=True, validate_azp=True, oidc_settings=None):
     """ Validates the claims embedded in the JSON Web Token. """
     if oidc_settings is None:
         oidc_settings = get_oidc_rp_settings()
@@ -109,14 +110,16 @@ def _validate_claims(id_token, nonce=None, validate_nonce=True, oidc_settings=No
     if isinstance(id_token['aud'], str):
         id_token['aud'] = [id_token['aud']]
 
-    if oidc_settings.CLIENT_ID not in id_token['aud']:
-        raise SuspiciousOperation('Invalid audience')
+    if validate_aud:
+        if oidc_settings.CLIENT_ID not in id_token['aud']:
+            raise SuspiciousOperation('Invalid audience')
 
-    if len(id_token['aud']) > 1 and 'azp' not in id_token:
-        raise SuspiciousOperation('Incorrect id_token: azp')
+    if validate_azp:
+        if len(id_token['aud']) > 1 and 'azp' not in id_token:
+            raise SuspiciousOperation('Incorrect id_token: azp')
 
-    if 'azp' in id_token and id_token['azp'] != oidc_settings.CLIENT_ID:
-        raise SuspiciousOperation('Incorrect id_token: azp')
+        if 'azp' in id_token and id_token['azp'] != oidc_settings.CLIENT_ID:
+            raise SuspiciousOperation('Incorrect id_token: azp')
 
     utc_timestamp = timegm(dt.datetime.utcnow().utctimetuple())
     if utc_timestamp > id_token['exp']:
