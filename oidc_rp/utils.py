@@ -63,19 +63,19 @@ def calculate_username_from_oidc_sub(sub):
 
 def validate_and_return_id_token(jws, nonce=None, validate_nonce=True, oidc_settings=None):
     """ Validates the id_token according to the OpenID Connect specification. """
-    oidc_setup = get_active_oidc_setup(oidc_settings)
-    shared_key = oidc_setup.CLIENT_SECRET \
-        if oidc_setup.PROVIDER_SIGNATURE_ALG == 'HS256' \
-        else oidc_setup.PROVIDER_SIGNATURE_KEY  # RS256
+    oidc_settings = get_active_oidc_setup(oidc_settings)
+    shared_key = oidc_settings.CLIENT_SECRET \
+        if oidc_settings.PROVIDER_SIGNATURE_ALG == 'HS256' \
+        else oidc_settings.PROVIDER_SIGNATURE_KEY  # RS256
 
     try:
         # Decodes the JSON Web Token and raise an error if the signature is invalid.
-        id_token = JWS().verify_compact(force_bytes(jws), _get_jwks_keys(shared_key))
+        id_token = JWS().verify_compact(force_bytes(jws), _get_jwks_keys(shared_key, oidc_settings=oidc_settings))
     except JWKESTException:
         return
 
     # Validates the claims embedded in the id_token.
-    _validate_claims(id_token, nonce=nonce, validate_nonce=validate_nonce, oidc_settings=oidc_setup)
+    _validate_claims(id_token, nonce=nonce, validate_nonce=validate_nonce, oidc_settings=oidc_settings)
 
     return id_token
 
