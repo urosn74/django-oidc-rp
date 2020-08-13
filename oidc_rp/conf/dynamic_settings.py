@@ -47,7 +47,7 @@ class DynamicOidcSettings:
 
     @property
     def realm(self):
-        return self._realm if realm else 'unknown'
+        return self._realm if self._realm else 'unknown'
 
     @property
     def provider_root(self):
