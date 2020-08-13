@@ -17,7 +17,8 @@ class DynamicOidcSettings:
                  authentication_redirect_uri='/',
                  authentication_failure_redirect_uri='/',
                  user_details_handler=None,
-                 unauthenticated_session_management_key=None):
+                 unauthenticated_session_management_key=None,
+                 realm=None):
         _parsed_provider_endpoint = urlparse(provider_endpoint)
         self.PROVIDER_ENDPOINT = provider_endpoint
         self.PROVIDER_URL = '{}://{}'.format(_parsed_provider_endpoint.scheme, _parsed_provider_endpoint.netloc)
@@ -42,3 +43,12 @@ class DynamicOidcSettings:
         self.AUTHENTICATION_FAILURE_REDIRECT_URI = authentication_failure_redirect_uri
         self.USER_DETAILS_HANDLER = user_details_handler
         self.UNAUTHENTICATED_SESSION_MANAGEMENT_KEY = unauthenticated_session_management_key
+        self._realm = realm
+
+    @property
+    def realm(self):
+        return self._realm if realm else 'unknown'
+
+    @property
+    def provider_root(self):
+        return urljoin(self.PROVIDER_URL, 'auth')
